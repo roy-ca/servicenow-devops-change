@@ -18,7 +18,7 @@ async function doFetch({
     const buildNumber = `${githubContext.run_id}`;
     const attemptNumber = `${githubContext.run_attempt}`;
 
-    const endpoint = `${instanceUrl}/api/sn_devops/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
+    const endpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
     
     let response = {};
     let status = false;

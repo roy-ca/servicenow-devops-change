@@ -52,7 +52,7 @@ async function createChange({
         throw new Error("Exception preparing payload");
     }
 
-    const postendpoint = `${instanceUrl}/api/sn_devops/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
+    const postendpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
     let response;
     let status = false;
 
