@@ -5073,7 +5073,6 @@ async function createChange({
             };
             let httpHeaders = { headers: defaultHeaders };
             response = await axios.post(postendpoint, JSON.stringify(payload), httpHeaders);
-            System.out.println("Response:"+JSON.stringify(response));
             status = true;
             break;
         } catch (err) {
