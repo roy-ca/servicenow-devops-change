@@ -7,8 +7,9 @@ const main = async() => {
   try {
     const instanceUrl = core.getInput('instance-url', { required: true });
     const toolId = core.getInput('tool-id', { required: true });
-    const username = core.getInput('devops-integration-user-name', { required: true });
-    const passwd = core.getInput('devops-integration-user-password', { required: true });
+    const username = core.getInput('devops-integration-user-name', { required: false });
+    const passwd = core.getInput('devops-integration-user-password', { required: false });
+    const token = core.getInput('devops-integration-token', { required: false });
     const jobname = core.getInput('job-name', { required: true });
 
     let changeRequestDetailsStr = core.getInput('change-request', { required: true });
@@ -28,6 +29,7 @@ const main = async() => {
         toolId,
         username,
         passwd,
+        token,
         jobname,
         githubContextStr,
         changeRequestDetailsStr,

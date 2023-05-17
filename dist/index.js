@@ -5009,6 +5009,7 @@ async function createChange({
   toolId,
   username,
   passwd,
+  token,
   jobname,
   githubContextStr,
   changeRequestDetailsStr,
@@ -5058,22 +5059,44 @@ async function createChange({
     }
     console.log("Payload:"+JSON.stringify(payload));
 
-    const postendpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
+    let postendpoint = '';
     let response;
+    let httpHeaders = {};
     let status = false;
+
+    if(token === '' && username === '' && passwd === '') {
+        throw new Error('Either secret token or integration username, password is needed for integration user authentication');
+    }
+    else if(token !== '') {
+        postendpoint =  `${instanceUrl}/api/sn_devops/v2/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
+        const defaultHeadersForToken = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'sn_devops.DevOpsToken '+`${toolId}:${token}`
+        };
+        httpHeaders = { headers: defaultHeadersForToken };
+    }
+    else if(username !== '' && passwd !== '') {
+        postendpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
+        const tokenBasicAuth = `${username}:${passwd}`;
+        const encodedTokenForBasicAuth = Buffer.from(tokenBasicAuth).toString('base64');
+
+        const defaultHeadersForBasicAuth = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Basic ' + `${encodedTokenForBasicAuth}`
+        };
+        httpHeaders = { headers: defaultHeadersForBasicAuth };
+    }
+    else {
+        throw new Error('For Basic Auth, Username and Password is mandatory for integration user authentication');
+    }
 
     while (attempts < 3) {
         try {
             ++attempts;
-            const token = `${username}:${passwd}`;
-            const encodedToken = Buffer.from(token).toString('base64');
-
-            const defaultHeaders = {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': 'Basic ' + `${encodedToken}`
-            };
-            let httpHeaders = { headers: defaultHeaders,  timeout: changeCreationTimeOut };
+            httpHeaders.timeout = changeCreationTimeOut;
+            console.log("Headers:"+JSON.stringify(httpHeaders));
             response = await axios.post(postendpoint, JSON.stringify(payload), httpHeaders);
             status = true;
             break;
@@ -5525,8 +5548,9 @@ const main = async() => {
   try {
     const instanceUrl = core.getInput('instance-url', { required: true });
     const toolId = core.getInput('tool-id', { required: true });
-    const username = core.getInput('devops-integration-user-name', { required: true });
-    const passwd = core.getInput('devops-integration-user-password', { required: true });
+    const username = core.getInput('devops-integration-user-name', { required: false });
+    const passwd = core.getInput('devops-integration-user-password', { required: false });
+    const token = core.getInput('devops-integration-token', { required: false });
     const jobname = core.getInput('job-name', { required: true });
 
     let changeRequestDetailsStr = core.getInput('change-request', { required: true });
@@ -5546,6 +5570,7 @@ const main = async() => {
         toolId,
         username,
         passwd,
+        token,
         jobname,
         githubContextStr,
         changeRequestDetailsStr,
