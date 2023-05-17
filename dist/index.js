@@ -5011,13 +5011,15 @@ async function createChange({
   passwd,
   jobname,
   githubContextStr,
-  changeRequestDetailsStr
+  changeRequestDetailsStr,
+  changeCreationTimeOut
 }) {
    
     console.log('Calling Change Control API to create change....');
     
     let changeRequestDetails;
     let attempts = 0;
+    changeCreationTimeOut = changeCreationTimeOut * 1000;
 
     try {
       changeRequestDetails = JSON.parse(changeRequestDetailsStr);
@@ -5050,7 +5052,6 @@ async function createChange({
             'branchName': `${githubContext.ref_name}`,
             'changeRequestDetails': changeRequestDetails
         };
-        console.log("Payload:"+JSON.stringify(payload));
     } catch (err) {
         console.log(`Error occured with message ${err}`);
         throw new Error("Exception preparing payload");
@@ -5071,11 +5072,15 @@ async function createChange({
                 'Accept': 'application/json',
                 'Authorization': 'Basic ' + `${encodedToken}`
             };
-            let httpHeaders = { headers: defaultHeaders };
+            let httpHeaders = { headers: defaultHeaders,  timeout: changeCreationTimeOut };
             response = await axios.post(postendpoint, JSON.stringify(payload), httpHeaders);
             status = true;
             break;
         } catch (err) {
+            if (err.code === 'ECONNABORTED') {
+                throw new Error(`change creation timeout after ${err.config.timeout}s`);
+            }
+
             if (err.message.includes('ECONNREFUSED') || err.message.includes('ENOTFOUND')) {
                 throw new Error('Invalid ServiceNow Instance URL. Please correct the URL and try again.');
             }
@@ -5142,9 +5147,10 @@ async function doFetch({
   username,
   passwd,
   jobname,
-  githubContextStr
+  githubContextStr,
+  prevPollChangeDetails
 }) {
-    console.log(`\nPolling for change status..........`);
+   
 
     let githubContext = JSON.parse(githubContextStr);
     
@@ -5218,14 +5224,17 @@ async function doFetch({
             throw new Error("500");
         }
 
-        let details =  changeStatus.details;
-        console.log('\n     \x1b[1m\x1b[32m'+JSON.stringify(details)+'\x1b[0m\x1b[0m');
-
-        let changeState =  details.status;
-
+        let currChangeDetails = changeStatus.details;
+        let changeState = currChangeDetails.status;
+    
         if (responseCode == 201) {
           if (changeState == "pending_decision") {
-            throw new Error("201");
+            if (isChangeDetailsChanged(prevPollChangeDetails, currChangeDetails)) {
+              console.log('\n \x1b[1m\x1b[32m' + JSON.stringify(currChangeDetails) + '\x1b[0m\x1b[0m');
+            }
+            throw new Error(JSON.stringify({ "statusCode": "201", "details": currChangeDetails }));
+          } else if((changeState == "failed")||(changeState == "error")) {
+              throw new Error(JSON.stringify({ "status":"error","details": currChangeDetails.details }));
           } else
             throw new Error("202");
         }
@@ -5237,6 +5246,18 @@ async function doFetch({
         throw new Error("500");
 
     return true;
+}
+
+function isChangeDetailsChanged(prevPollChangeDetails, currChangeDetails) {
+  if (Object.keys(currChangeDetails).length !== Object.keys(prevPollChangeDetails).length) {
+    return true;
+  }
+  for (let field of Object.keys(currChangeDetails)) {
+    if (currChangeDetails[field] !== prevPollChangeDetails[field]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 module.exports = { doFetch };
@@ -5258,7 +5279,9 @@ async function tryFetch({
   username,
   passwd,
   jobname,
-  githubContextStr
+  githubContextStr,
+  abortOnChangeStepTimeout,
+  prevPollChangeDetails
 }) {
     try {
         await doFetch({
@@ -5267,7 +5290,8 @@ async function tryFetch({
           username,
           passwd,
           jobname,
-          githubContextStr
+          githubContextStr,
+          prevPollChangeDetails
         });
     } catch (error) {
         if (error.message == "500") {
@@ -5294,16 +5318,28 @@ async function tryFetch({
           throw new Error("****Change has been created but the change is either rejected or cancelled.");
         }
 
-        if (error.message == "201") {
-          console.log('\n****Change is pending for approval decision.');
+        const errorMessage = error.message;
+        if (errorMessage) {
+          const errorObject = JSON.parse(errorMessage);
+          if (errorObject && errorObject.statusCode == "201") {
+            prevPollChangeDetails = errorObject.details;
+          }else if(errorObject && errorObject.status == "error"){
+            //throws error incase of status is 'error'
+            throw new Error(errorObject.details);
+          }
         }
 
         // Wait and then continue
         await new Promise((resolve) => setTimeout(resolve, interval * 1000));
 
         if (+new Date() - start > timeout * 1000) {
-          throw new Error(`Timeout after ${timeout} seconds.`);
+          if(!abortOnChangeStepTimeout){
+             console.error('\n    \x1b[38;5;214m Timeout occured after '+timeout+' seconds but pipeline will coninue since abortOnChangeStepTimeout flag is false \x1b[38;5;214m');
+             return;
+          }
+             throw new Error(`Timeout after ${timeout} seconds.Workflow execution is aborted since abortOnChangeStepTimeout flag is true`);
         }
+
 
         await tryFetch({
           start,
@@ -5314,7 +5350,9 @@ async function tryFetch({
           username,
           passwd,
           jobname,
-          githubContextStr
+          githubContextStr,
+          abortOnChangeStepTimeout,
+          prevPollChangeDetails
         });
     }
 }
@@ -5492,6 +5530,12 @@ const main = async() => {
 
     let changeRequestDetailsStr = core.getInput('change-request', { required: true });
     let githubContextStr = core.getInput('context-github', { required: true });
+
+    let abortOnChangeCreationFailure = core.getInput('abortOnChangeCreationFailure');
+    abortOnChangeCreationFailure = abortOnChangeCreationFailure === undefined || abortOnChangeCreationFailure === "" ? true : (abortOnChangeCreationFailure == "true");
+    let changeCreationTimeOut = parseInt(core.getInput('changeCreationTimeOut') || 3600);
+    changeCreationTimeOut = changeCreationTimeOut >= 3600 ? changeCreationTimeOut : 3600;
+
     let status = true;
     let response;
 
@@ -5503,11 +5547,19 @@ const main = async() => {
         passwd,
         jobname,
         githubContextStr,
-        changeRequestDetailsStr
+        changeRequestDetailsStr,
+        changeCreationTimeOut
       });
     } catch (err) {
-      status = false;
-      core.setFailed(err.message);
+      if (abortOnChangeCreationFailure) {
+        status = false;
+        core.setFailed(err.message);
+      }
+      else { 
+        console.error("creation failed with error message " + err.message);
+        console.log('\n  \x1b[38;5;214m Workflow will continue executing the next step as abortOnChangeCreationFailure is ' + abortOnChangeCreationFailure + '\x1b[38;5;214m');
+        return;
+      }
     }
 
     if (status) {
@@ -5517,8 +5569,12 @@ const main = async() => {
       interval = interval>=100 ? interval : 100;
       timeout = timeout>=100? timeout : 3600;
 
+      let abortOnChangeStepTimeout = core.getInput('abortOnChangeStepTimeout');
+      abortOnChangeStepTimeout = abortOnChangeStepTimeout === undefined || abortOnChangeStepTimeout === "" ? false : (abortOnChangeStepTimeout == "true");
+
       let start = +new Date();
-      
+      let prevPollChangeDetails = {};
+
       response = await tryFetch({
         start,
         interval,
@@ -5528,7 +5584,9 @@ const main = async() => {
         username,
         passwd,
         jobname,
-        githubContextStr
+        githubContextStr,
+        abortOnChangeStepTimeout,
+        prevPollChangeDetails
       });
 
       console.log('Get change status was successfull.');  
