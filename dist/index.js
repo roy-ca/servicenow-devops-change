@@ -5056,6 +5056,7 @@ async function createChange({
         console.log(`Error occured with message ${err}`);
         throw new Error("Exception preparing payload");
     }
+    console.log("Payload:"+JSON.stringify(payload));
 
     const postendpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeControl?toolId=${toolId}&toolType=github_server`;
     let response;
