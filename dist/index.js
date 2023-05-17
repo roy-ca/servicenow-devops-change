@@ -5096,7 +5096,6 @@ async function createChange({
         try {
             ++attempts;
             httpHeaders.timeout = changeCreationTimeOut;
-            console.log("Headers:"+JSON.stringify(httpHeaders));
             response = await axios.post(postendpoint, JSON.stringify(payload), httpHeaders);
             status = true;
             break;
@@ -5170,6 +5169,7 @@ async function doFetch({
   toolId,
   username,
   passwd,
+  token,
   jobname,
   githubContextStr,
   prevPollChangeDetails
@@ -5183,7 +5183,8 @@ async function doFetch({
     const buildNumber = `${githubContext.run_id}`;
     const attemptNumber = `${githubContext.run_attempt}`;
 
-    const endpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
+    let endpoint = '';
+    let httpHeaders = {};
     
     let response = {};
     let status = false;
@@ -5191,16 +5192,33 @@ async function doFetch({
     let responseCode = 500;
 
     try {
-        const token = `${username}:${passwd}`;
-        const encodedToken = Buffer.from(token).toString('base64');
-
-        const defaultHeaders = {
+        if(token === '' && username === '' && passwd === '') {
+          throw new Error("400");
+        }
+        else if(token !== '') {
+          endpoint =  `${instanceUrl}/api/sn_devops/v2/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
+          const defaultHeadersForToken = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'Authorization': 'Basic ' + `${encodedToken}`
-        };
+            'Authorization': 'sn_devops.DevOpsToken '+`${toolId}:${token}`
+          };
+          httpHeaders = { headers: defaultHeadersForToken };
+        }
+        else if(username !== '' && passwd !== '') {
+          endpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
+          const tokenBasicAuth = `${username}:${passwd}`;
+          const encodedTokenForBasicAuth = Buffer.from(tokenBasicAuth).toString('base64');
 
-        let httpHeaders = { headers: defaultHeaders };
+          const defaultHeadersForBasicAuth = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': 'Basic ' + `${encodedTokenForBasicAuth}`
+          };
+          httpHeaders = { headers: defaultHeadersForBasicAuth };
+        }
+        else {
+          throw new Error("400");
+        }
         response = await axios.get(endpoint, httpHeaders);
         status = true;
     } catch (err) {
@@ -5302,6 +5320,7 @@ async function tryFetch({
   toolId,
   username,
   passwd,
+  token,
   jobname,
   githubContextStr,
   abortOnChangeStepTimeout,
@@ -5313,6 +5332,7 @@ async function tryFetch({
           toolId,
           username,
           passwd,
+          token,
           jobname,
           githubContextStr,
           prevPollChangeDetails
@@ -5373,6 +5393,7 @@ async function tryFetch({
           toolId,
           username,
           passwd,
+          token,
           jobname,
           githubContextStr,
           abortOnChangeStepTimeout,
@@ -5609,6 +5630,7 @@ const main = async() => {
         toolId,
         username,
         passwd,
+        token,
         jobname,
         githubContextStr,
         abortOnChangeStepTimeout,

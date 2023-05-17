@@ -68,6 +68,7 @@ const main = async() => {
         toolId,
         username,
         passwd,
+        token,
         jobname,
         githubContextStr,
         abortOnChangeStepTimeout,

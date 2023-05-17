@@ -93,7 +93,6 @@ async function createChange({
         try {
             ++attempts;
             httpHeaders.timeout = changeCreationTimeOut;
-            console.log("Headers:"+JSON.stringify(httpHeaders));
             response = await axios.post(postendpoint, JSON.stringify(payload), httpHeaders);
             status = true;
             break;
