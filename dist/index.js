@@ -5057,7 +5057,6 @@ async function createChange({
         console.log(`Error occured with message ${err}`);
         throw new Error("Exception preparing payload");
     }
-    console.log("Payload:"+JSON.stringify(payload));
 
     let postendpoint = '';
     let response;
@@ -5192,10 +5191,7 @@ async function doFetch({
     let responseCode = 500;
 
     try {
-        if(token === '' && username === '' && passwd === '') {
-          throw new Error("400");
-        }
-        else if(token !== '') {
+        if(token !== '') {
           endpoint =  `${instanceUrl}/api/sn_devops/v2/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
           const defaultHeadersForToken = {
             'Content-Type': 'application/json',
@@ -5204,7 +5200,7 @@ async function doFetch({
           };
           httpHeaders = { headers: defaultHeadersForToken };
         }
-        else if(username !== '' && passwd !== '') {
+        else {
           endpoint = `${instanceUrl}/api/sn_devops/v1/devops/orchestration/changeStatus?toolId=${toolId}&stageName=${jobname}&pipelineName=${pipelineName}&buildNumber=${buildNumber}&attemptNumber=${attemptNumber}`;
           const tokenBasicAuth = `${username}:${passwd}`;
           const encodedTokenForBasicAuth = Buffer.from(tokenBasicAuth).toString('base64');
@@ -5215,9 +5211,6 @@ async function doFetch({
             'Authorization': 'Basic ' + `${encodedTokenForBasicAuth}`
           };
           httpHeaders = { headers: defaultHeadersForBasicAuth };
-        }
-        else {
-          throw new Error("400");
         }
         response = await axios.get(endpoint, httpHeaders);
         status = true;

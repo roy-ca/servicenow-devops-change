@@ -54,7 +54,6 @@ async function createChange({
         console.log(`Error occured with message ${err}`);
         throw new Error("Exception preparing payload");
     }
-    console.log("Payload:"+JSON.stringify(payload));
 
     let postendpoint = '';
     let response;
