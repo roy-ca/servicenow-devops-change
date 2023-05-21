@@ -41,7 +41,7 @@ const main = async() => {
         core.setFailed(err.message);
       }
       else { 
-        console.error("creation failed with error message " + err.message);
+        console.error("creation failed with error message ," + err.message);
         console.log('\n  \x1b[38;5;214m Workflow will continue executing the next step as abortOnChangeCreationFailure is ' + abortOnChangeCreationFailure + '\x1b[38;5;214m');
         return;
       }
