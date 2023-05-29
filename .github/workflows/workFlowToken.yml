@@ -47,13 +47,3 @@ jobs:
           changeCreationTimeOut: '3600'
           abortOnChangeCreationFailure: true
           abortOnChangeStepTimeout: true
-`
-    
-  deploy:
-    name: Deploy
-    needs: changeApproval
-    runs-on: ubuntu-latest
-
-    steps:     
-      - name: Run Deployment Script
-        run: echo "Deployment Finished....."
